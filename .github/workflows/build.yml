@@ -1,0 +1,63 @@
+name: Build APK Nativo
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codigo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Montar Estrutura e Compilar
+        run: |
+          # 1. Salvar o seu ficheiro App.jsx em segurança
+          if [ -f App.jsx ]; then cp App.jsx MEU_APP.jsx; fi
+          if [ -f src/App.jsx ]; then cp src/App.jsx MEU_APP.jsx; fi
+          
+          # 2. Criar uma base limpa e oficial do React
+          npx create-vite@latest onibus-app --template react --yes
+          cd onibus-app
+          
+          # 3. Instalar as dependências necessárias para o mapa e ícones
+          npm install @supabase/supabase-js leaflet lucide-react @capacitor/core @capacitor/cli @capacitor/android
+          
+          # 4. Colocar o seu código dentro da base limpa
+          if [ -f ../MEU_APP.jsx ]; then
+            cp ../MEU_APP.jsx src/App.jsx
+          fi
+          
+          # 5. Fazer o build do site
+          npm run build
+          
+          # 6. Transformar num projeto Android
+          npx cap init "Ilha Comprida" "com.ilha.onibus" --web-dir dist --yes
+          npx cap add android
+          npx cap sync android
+          
+          # 7. Compilar o ficheiro APK instalável
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Enviar APK Gerado
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: onibus-app/android/app/build/outputs/apk/debug/app-debug.apk
