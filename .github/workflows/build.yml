@@ -1,0 +1,76 @@
+name: Build APK Nativo
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codigo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Construir Projeto do Zero sem Interrupcoes
+        run: |
+          # 1. Salvar o seu codigo
+          mkdir -p backup_codigo
+          if [ -f App.jsx ]; then cp App.jsx backup_codigo/App.jsx; fi
+          if [ -f src/App.jsx ]; then cp src/App.jsx backup_codigo/App.jsx; fi
+          
+          # 2. Criar a pasta do app e entrar nela
+          mkdir -p onibus-app
+          cd onibus-app
+          
+          # 3. Criar package.json silenciosamente
+          npm init -y
+          npm pkg set type="module"
+          npm pkg set scripts.build="vite build"
+          
+          # 4. Instalar tudo sem perguntas
+          npm install react@18 react-dom@18 @supabase/supabase-js leaflet lucide-react @capacitor/core
+          npm install --save-dev vite @vitejs/plugin-react @capacitor/cli @capacitor/android
+          
+          # 5. Criar a estrutura e meter la o seu codigo
+          mkdir -p src
+          if [ -f ../backup_codigo/App.jsx ]; then
+            cp ../backup_codigo/App.jsx src/App.jsx
+          else
+            echo "import React from 'react'; export default function App() { return <h1>App Carregado</h1>; }" > src/App.jsx
+          fi
+          
+          # 6. Criar os ficheiros de configuracao em linhas seguras
+          echo "import { defineConfig } from 'vite'; import react from '@vitejs/plugin-react'; export default defineConfig({ plugins: [react()] });" > vite.config.js
+          echo "<!DOCTYPE html><html lang='pt'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><script src='https://cdn.tailwindcss.com'></script><link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'/></head><body><div id='root'></div><script type='module' src='/src/main.jsx'></script></body></html>" > index.html
+          echo "import React from 'react'; import ReactDOM from 'react-dom/client'; import App from './App.jsx'; ReactDOM.createRoot(document.getElementById('root')).render(<App />);" > src/main.jsx
+          
+          # 7. Compilar o site
+          npm run build
+          
+          # 8. Transformar em Android e Compilar
+          npx cap init "Ilha Comprida" "com.ilha.onibus" --web-dir dist
+          npx cap add android
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Enviar APK Gerado
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: onibus-app/android/app/build/outputs/apk/debug/app-debug.apk
