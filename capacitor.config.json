@@ -1,0 +1,6 @@
+{
+  "appId": "com.ilhasolucoes.onibus",
+  "appName": "Ilha Comprida Ônibus",
+  "webDir": "build",
+  "bundledWebRuntime": false
+}
