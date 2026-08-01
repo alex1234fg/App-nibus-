@@ -1,0 +1,239 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Bus, MapPin, Clock, Shield, AlertTriangle, Navigation, Menu, X } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('home');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminPin, setAdminPin] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Estado dos Autocarros / Rotas - CORRIGIDO (Chaves adicionadas)
+  const [buses, setBuses] = useState([
+    { 
+      id: 1, name: 'Linha Centro - Boqueirão', status: 'Em Circulação', 
+      lat: -24.7123, lng: -47.5312, nextStop: 'Balneário Adriana', time: '10:45' 
+    },
+    { 
+      id: 2, name: 'Linha Circular Sul', status: 'Pontual', 
+      lat: -24.7541, lng: -47.5821, nextStop: 'Praia do Forte', time: '11:00' 
+    }
+  ]);
+
+  const [alerts, setAlerts] = useState([
+    { id: 1, title: 'Aviso de Trânsito', desc: 'Manutenção na Av. Beira Mar próximo ao Balneário São Pedro.', time: '09:30' }
+  ]);
+
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+
+  useEffect(() => {
+    if (activeTab === 'map' && mapRef.current && !mapInstanceRef.current) {
+      const map = L.map(mapRef.current).setView([-24.7300, -47.5500], 13);
+      
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      buses.forEach(bus => {
+        L.marker([bus.lat, bus.lng])
+          .addTo(map)
+          .bindPopup(`<b>${bus.name}</b><br>Próxima paragem: ${bus.nextStop}<br>Estado: ${bus.status}`);
+      });
+
+      mapInstanceRef.current = map;
+    }
+
+    return () => {
+      if (mapInstanceRef.current && activeTab !== 'map') {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [activeTab, buses]);
+
+  const handleAdminLogin = (e) => {
+    e.preventDefault();
+    if (adminPin === '1234') {
+      setIsAdmin(true);
+      alert('Acesso Administrativo concedido!');
+    } else {
+      alert('PIN incorreto! Use 1234 para testes.');
+    }
+  };
+
+  const updateBusStatus = (id, newStatus) => {
+    setBuses(buses.map(b => b.id === id ? { ...b, status: newStatus } : b));
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
+      <header className="bg-emerald-700 text-white shadow-md sticky top-0 z-50">
+        <div className="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <Bus className="w-7 h-7" />
+            <h1 className="text-lg font-bold tracking-wide">Ilha Ônibus</h1>
+          </div>
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-1 rounded-lg focus:outline-none hover:bg-emerald-600"
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
+
+        {mobileMenuOpen && (
+          <div className="bg-emerald-800 px-4 pt-2 pb-4 space-y-2 border-t border-emerald-600">
+            <button 
+              onClick={() => { setActiveTab('home'); setMobileMenuOpen(false); }}
+              className={`w-full text-left py-2 px-3 rounded ${activeTab === 'home' ? 'bg-emerald-900 font-semibold' : 'hover:bg-emerald-700'}`}
+            >
+              Início / Horários
+            </button>
+            <button 
+              onClick={() => { setActiveTab('map'); setMobileMenuOpen(false); }}
+              className={`w-full text-left py-2 px-3 rounded ${activeTab === 'map' ? 'bg-emerald-900 font-semibold' : 'hover:bg-emerald-700'}`}
+            >
+              Mapa ao Vivo
+            </button>
+            <button 
+              onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }}
+              className={`w-full text-left py-2 px-3 rounded ${activeTab === 'admin' ? 'bg-emerald-900 font-semibold' : 'hover:bg-emerald-700'}`}
+            >
+              Painel ADM
+            </button>
+          </div>
+        )}
+      </header>
+
+      <main className="flex-1 max-w-md w-full mx-auto p-4 pb-20">
+        {activeTab === 'home' && (
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+              <h2 className="text-md font-bold text-emerald-800 flex items-center gap-2 mb-3">
+                <Clock className="w-5 h-5 text-emerald-600" /> Próximas Partidas
+              </h2>
+              <div className="space-y-3">
+                {buses.map(bus => (
+                  <div key={bus.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-sm text-slate-800">{bus.name}</p>
+                      <p className="text-xs text-slate-500">Próxima: {bus.nextStop}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-bold text-emerald-700">{bus.time}</span>
+                      <p className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full mt-1 inline-block">
+                        {bus.status}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm">
+              <h3 className="text-sm font-bold text-amber-800 flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600" /> Avisos da Linha
+              </h3>
+              {alerts.map(alert => (
+                <div key={alert.id} className="text-xs text-amber-900 space-y-1">
+                  <p className="font-semibold">{alert.title} ({alert.time})</p>
+                  <p>{alert.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'map' && (
+          <div className="space-y-3">
+            <h2 className="text-md font-bold text-slate-800 flex items-center gap-2">
+              <Navigation className="w-5 h-5 text-emerald-600" /> Localização em Tempo Real
+            </h2>
+            <div 
+              ref={mapRef} 
+              className="w-full h-[400px] rounded-xl shadow-inner border border-slate-200 z-10"
+            />
+            <p className="text-xs text-slate-500 text-center">Toque nos marcadores para ver detalhes da linha.</p>
+          </div>
+        )}
+
+        {activeTab === 'admin' && (
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
+            <h2 className="text-md font-bold text-slate-800 flex items-center gap-2">
+              <Shield className="w-5 h-5 text-emerald-600" /> Área Administrativa
+            </h2>
+
+            {!isAdmin ? (
+              <form onSubmit={handleAdminLogin} className="space-y-3">
+                <p className="text-xs text-slate-600">Insira o PIN de administrador para gerir os autocarros.</p>
+                <input 
+                  type="password" 
+                  placeholder="PIN (ex: 1234)" 
+                  value={adminPin}
+                  onChange={(e) => setAdminPin(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-emerald-600"
+                />
+                <button type="submit" className="w-full bg-emerald-700 text-white py-2 rounded-lg text-sm font-semibold hover:bg-emerald-800">
+                  Entrar no Painel
+                </button>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center bg-emerald-50 p-2 rounded-lg">
+                  <span className="text-xs font-bold text-emerald-800">Modo Administrador Ativo</span>
+                  <button onClick={() => setIsAdmin(false)} className="text-xs text-red-600 underline">Sair</button>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Gerir Estado das Linhas</h3>
+                  {buses.map(bus => (
+                    <div key={bus.id} className="p-3 bg-slate-50 border rounded-lg space-y-2">
+                      <p className="text-xs font-bold">{bus.name}</p>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => updateBusStatus(bus.id, 'Em Circulação')} 
+                          className="flex-1 bg-emerald-600 text-white py-1 rounded text-xs hover:bg-emerald-700"
+                        >
+                          Circulando
+                        </button>
+                        <button 
+                          onClick={() => updateBusStatus(bus.id, 'Atrasado')} 
+                          className="flex-1 bg-amber-500 text-white py-1 rounded text-xs hover:bg-amber-600"
+                        >
+                          Atrasado
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      <nav className="bg-white border-t border-slate-200 fixed bottom-0 left-0 right-0 max-w-md mx-auto flex justify-around py-3 shadow-lg z-50">
+        <button 
+          onClick={() => setActiveTab('home')} 
+          className={`flex flex-col items-center text-xs ${activeTab === 'home' ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}
+        >
+          <Clock className="w-5 h-5 mb-1" /> Horários
+        </button>
+        <button 
+          onClick={() => setActiveTab('map')} 
+          className={`flex flex-col items-center text-xs ${activeTab === 'map' ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}
+        >
+          <MapPin className="w-5 h-5 mb-1" /> Mapa
+        </button>
+        <button 
+          onClick={() => setActiveTab('admin')} 
+          className={`flex flex-col items-center text-xs ${activeTab === 'admin' ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}
+        >
+          <Shield className="w-5 h-5 mb-1" /> ADM
+        </button>
+      </nav>
+    </div>
+  );
+}
