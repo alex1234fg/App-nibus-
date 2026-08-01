@@ -1,0 +1,131 @@
+name: Build APK Nativo
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aceder ao Código
+        uses: actions/checkout@v3
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Garantir Configurações e Instalar Dependências
+        run: |
+          mkdir -p src
+          if [ -f App.jsx ]; then
+            cp App.jsx src/App.jsx
+          fi
+
+          cat << 'EOF' > package.json
+          {
+            "name": "ilha-comprida-onibus",
+            "private": true,
+            "version": "1.0.0",
+            "type": "module",
+            "scripts": {
+              "dev": "vite",
+              "build": "vite build",
+              "preview": "vite preview"
+            },
+            "dependencies": {
+              "@capacitor/android": "^5.0.0",
+              "@capacitor/cli": "^5.0.0",
+              "@capacitor/core": "^5.0.0",
+              "@supabase/supabase-js": "^2.111.0",
+              "leaflet": "^1.9.4",
+              "lucide-react": "^1.28.0",
+              "react": "^18.2.0",
+              "react-dom": "^18.2.0"
+            },
+            "devDependencies": {
+              "@types/react": "^18.2.66",
+              "@types/react-dom": "^18.2.22",
+              "@vitejs/plugin-react": "^4.2.1",
+              "vite": "^5.1.6"
+            }
+          }
+          EOF
+
+          if [ ! -f index.html ]; then
+            cat << 'EOF' > index.html
+            <!doctype html>
+            <html lang="pt">
+              <head>
+                <meta charset="UTF-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                <title>Ilha Comprida Ônibus</title>
+                <script src="https://cdn.tailwindcss.com"></script>
+                <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+              </head>
+              <body>
+                <div id="root"></div>
+                <script type="module" src="/src/main.jsx"></script>
+              </body>
+            </html>
+            EOF
+          fi
+
+          if [ ! -f src/main.jsx ]; then
+            cat << 'EOF' > src/main.jsx
+            import React from 'react'
+            import ReactDOM from 'react-dom/client'
+            import App from './App.jsx'
+
+            ReactDOM.createRoot(document.getElementById('root')).render(
+              <React.StrictMode>
+                <App />
+              </React.StrictMode>,
+            )
+            EOF
+          fi
+
+          if [ ! -f vite.config.js ]; then
+            cat << 'EOF' > vite.config.js
+            import { defineConfig } from 'vite'
+            import react from '@vitejs/plugin-react'
+
+            export default defineConfig({
+              plugins: [react()],
+            })
+            EOF
+          fi
+
+          npm install
+
+      - name: Compilar Aplicação Web (Vite Build)
+        run: npm run build
+
+      - name: Configurar Java JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Inicializar Capacitor e Android
+        run: |
+          npx cap init "Ilha Comprida" "com.ilhasolucoes.onibus" --web-dir dist || true
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Gerar APK com Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Salvar Ficheiro APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
