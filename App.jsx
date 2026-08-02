@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   MapPin, Clock, Bell, Settings, AlertTriangle, Check,
   ChevronRight, ChevronLeft, ArrowLeftRight, X,
-  Search, Navigation, Trash2, List, Sparkles, Footprints, Target, Bus
+  Search, Navigation, List, Sparkles, Footprints, Target, Bus
 } from "lucide-react";
 
 // Injeta o Tailwind e o Leaflet automaticamente
@@ -88,7 +88,7 @@ const INITIAL_LINES = [
   },
 ];
 
-// --- FUNÇÕES DE TEMPO E MATEMÁTICA ---
+// --- FUNÇÕES DE TEMPO E CÁLCULO ---
 function timeToMinutes(str) { 
   if (typeof str !== 'string') return 0;
   const [h, m] = str.split(":").map(Number); 
@@ -116,13 +116,16 @@ function getDistance(p1, p2) {
   return Math.sqrt(dx*dx + dy*dy);
 }
 
+// CORREÇÃO AQUI: Agora a viagem continua a mostrar progresso no mapa se o status for "problema"
 function getActiveTripProgress(durationMins, liveInfo) {
-  if (!liveInfo || liveInfo.status !== "em rota") {
+  if (!liveInfo || (liveInfo.status !== "em rota" && liveInfo.status !== "problema")) {
     return { active: false, progress: 0, startTime: null, mode: "parado" };
   }
+  
   if (liveInfo.gpsProgress !== undefined && liveInfo.gpsProgress >= 0) {
     return { active: true, progress: Math.min(liveInfo.gpsProgress, 1), startTime: liveInfo.startTimeMins || 0, mode: "GPS Ao Vivo" };
   }
+  
   if (liveInfo.startTimeMins !== undefined) {
     const now = new Date();
     const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -147,7 +150,7 @@ function sendPushNotification(title, body) {
   }
 }
 
-// --- MODAL MODERNO REUTILIZÁVEL ---
+// --- MODAL REUTILIZÁVEL ---
 function CustomModal({ isOpen, onClose, title, children }) {
   if (!isOpen) return null;
   return (
@@ -167,7 +170,7 @@ function CustomModal({ isOpen, onClose, title, children }) {
   );
 }
 
-// --- TELA DE PRIMEIRO ACESSO (ONBOARDING) COM PERMISSÕES AUTOMÁTICAS ---
+// --- ONBOARDING COM PERMISSÕES ---
 function OnboardingScreen({ onComplete }) {
   const [loading, setLoading] = useState(false);
   const [permStatus, setPermStatus] = useState({ loc: false, notif: false });
@@ -194,15 +197,13 @@ function OnboardingScreen({ onComplete }) {
 
     setPermStatus({ loc: locGranted, notif: notifGranted });
     setLoading(false);
-    setTimeout(() => {
-      onComplete();
-    }, 800);
+    setTimeout(() => { onComplete(); }, 800);
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-blue-950 flex flex-col items-center justify-between p-6 text-white text-center animate-in fade-in duration-500">
       <div className="w-full flex justify-end">
-        <span className="text-[11px] uppercase tracking-widest text-blue-300 font-bold bg-blue-900/60 px-3 py-1.5 rounded-full border border-blue-500/30 shadow-sm">Configuração Inicial</span>
+        <span className="text-[11px] uppercase tracking-widest text-blue-300 font-bold bg-blue-900/60 px-3 py-1.5 rounded-full border border-blue-500/30">Configuração Inicial</span>
       </div>
 
       <div className="space-y-6 my-auto max-w-sm w-full">
@@ -224,7 +225,7 @@ function OnboardingScreen({ onComplete }) {
             <div className={`p-2 rounded-xl shrink-0 ${permStatus.loc ? 'bg-blue-400 text-slate-950' : 'bg-blue-800 text-blue-200'}`}><Navigation size={16} /></div>
             <div className="flex-1">
               <p className="text-xs font-bold text-white">Geolocalização & Segundo Plano</p>
-              <p className="text-[10px] text-blue-300">Identifica a linha mais próxima de si continuamente.</p>
+              <p className="text-[10px] text-blue-300">Identifica a linha mais próxima de si.</p>
             </div>
             {permStatus.loc && <Check size={16} className="text-blue-300" />}
           </div>
@@ -233,7 +234,7 @@ function OnboardingScreen({ onComplete }) {
             <div className={`p-2 rounded-xl shrink-0 ${permStatus.notif ? 'bg-blue-400 text-slate-950' : 'bg-blue-800 text-blue-200'}`}><Bell size={16} /></div>
             <div className="flex-1">
               <p className="text-xs font-bold text-white">Notificações Push</p>
-              <p className="text-[10px] text-blue-300">Avisos atempados de aproximação do autocarro.</p>
+              <p className="text-[10px] text-blue-300">Avisos atempados de aproximação.</p>
             </div>
             {permStatus.notif && <Check size={16} className="text-blue-300" />}
           </div>
@@ -246,21 +247,23 @@ function OnboardingScreen({ onComplete }) {
           disabled={loading}
           className="w-full bg-blue-600 hover:bg-blue-500 text-white font-extrabold py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
         >
-          {loading ? <Sparkles className="animate-spin" size={18} /> : <Sparkles size={18} />} 
-          {loading ? "A configurar permissões..." : "Permitir e Iniciar Aplicação"}
+          <Sparkles size={18} /> {loading ? "A configurar..." : "Permitir e Iniciar Aplicação"}
         </button>
       </div>
     </div>
   );
 }
 
-// --- COMPONENTES VISUAIS ---
+// CORREÇÃO: Ponto de Status com suporte a cor de aviso (vermelho)
 function StatusDot({ status, color }) {
+  const isProblem = status === "problema";
   const pulsing = status === "em rota";
+  const dotColor = isProblem ? "#EF4444" : color;
+  
   return (
     <span className="relative flex h-3 w-3">
-      {pulsing && <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ backgroundColor: color }} />}
-      <span className="relative inline-flex rounded-full h-3 w-3" style={{ backgroundColor: color }} />
+      {pulsing && <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ backgroundColor: dotColor }} />}
+      <span className="relative inline-flex rounded-full h-3 w-3" style={{ backgroundColor: dotColor }} />
     </span>
   );
 }
@@ -268,8 +271,8 @@ function StatusDot({ status, color }) {
 function StatusLabel({ status, mode }) {
   const map = {
     "em rota": { text: mode === "GPS Ao Vivo" ? "Ao Vivo (GPS)" : "Previsão (Horário)", cls: "text-blue-700 bg-blue-50 border border-blue-200" },
-    parado: { text: "Aguardando", cls: "text-amber-700 bg-amber-50 border border-amber-200" },
-    problema: { text: "Aviso na via", cls: "text-red-700 bg-red-50 border border-red-200" },
+    parado: { text: "Aguardando Partida", cls: "text-amber-700 bg-amber-50 border border-amber-200" },
+    problema: { text: "Aviso na via / Atraso", cls: "text-red-700 bg-red-50 border border-red-200 font-extrabold" },
   };
   const s = map[status] || { text: status, cls: "text-gray-700 bg-gray-50 border border-gray-200" };
   return <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase ${s.cls}`}>{s.text}</span>;
@@ -299,7 +302,7 @@ function ScreenHeader({ title, subtitle, onBack, color }) {
 }
 
 // --- MAPA LEAFLET NATIVO ---
-function LeafletMap({ points, busProgress = -1, lineColor }) {
+function LeafletMap({ points, busProgress = -1, lineColor, hasProblem = false }) {
   const mapId = useMemo(() => "map-" + Math.random().toString(36).substring(2, 9), []);
   
   const pathData = useMemo(() => {
@@ -356,9 +359,11 @@ function LeafletMap({ points, busProgress = -1, lineColor }) {
             const currentPoint = [pLat, pLng];
             const traversedPoints = [...pathData.validPoints.slice(0, lastIndex + 1), currentPoint];
             
-            container._redLayer = window.L.polyline(traversedPoints, { color: '#EF4444', weight: 5 }).addTo(map);
+            // Se houver problema, a linha fica vermelha
+            const progressColor = hasProblem ? '#EF4444' : '#2563EB';
+            container._redLayer = window.L.polyline(traversedPoints, { color: progressColor, weight: 5 }).addTo(map);
             
-            const busHtml = `<div style="background-color: white; border: 3px solid #EF4444; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-size: 14px;">🚌</div>`;
+            const busHtml = `<div style="background-color: white; border: 3px solid ${progressColor}; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-size: 14px;">${hasProblem ? '⚠️' : '🚌'}</div>`;
             const busIcon = window.L.divIcon({ html: busHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] });
             container._busMarker = window.L.marker(currentPoint, { icon: busIcon }).addTo(map);
             
@@ -369,12 +374,12 @@ function LeafletMap({ points, busProgress = -1, lineColor }) {
     }, 100);
 
     return () => clearInterval(checkL);
-  }, [pathData, busProgress, mapId, lineColor]); 
+  }, [pathData, busProgress, mapId, lineColor, hasProblem]); 
 
   return <div id={mapId} style={{ width: '100%', height: '100%', zIndex: 1, backgroundColor: '#e5e7eb' }}></div>;
 }
 
-// --- TELA DO DETALHE DA LINHA ---
+// --- TELA DE DETALHE DA LINHA ---
 function LineDetailScreen({ line, initialDir, onBack, customRoutes, liveStatus, customStops }) {
   const [dir, setDir] = useState(initialDir ?? 0);
   const activeDirection = line.directions[dir] || line.directions[0];
@@ -395,9 +400,9 @@ function LineDetailScreen({ line, initialDir, onBack, customRoutes, liveStatus, 
   const stopsKey = `${line.id}_dir_${dir}_stops`;
   const activeStops = customStops[stopsKey] || line.stops;
   const liveInfo = liveStatus[line.id] || {};
-
   const userAlertTime = parseInt(localStorage.getItem('notif_minutes') || '10', 10);
 
+  // CORREÇÃO: O alerta vermelho agora sobrepõe o mapa caso o status seja problema
   useEffect(() => {
     const updateSimulation = () => {
       const trip = getActiveTripProgress(SIMULATED_TRIP_DURATION, liveInfo);
@@ -405,7 +410,7 @@ function LineDetailScreen({ line, initialDir, onBack, customRoutes, liveStatus, 
         setSimulatedProgress(trip.progress);
         setActiveTripInfo(trip);
 
-        if (alertTargetStop !== null) {
+        if (alertTargetStop !== null && liveInfo.status === "em rota") {
           const stopPercentage = alertTargetStop / Math.max(1, activeStops.length - 1);
           const diff = stopPercentage - trip.progress;
           if (diff >= 0 && diff <= 0.08 && !alertedStopsRef.current.has(alertTargetStop)) {
@@ -436,17 +441,22 @@ function LineDetailScreen({ line, initialDir, onBack, customRoutes, liveStatus, 
       </div>
 
       <div className="h-[35vh] w-full relative z-0 border-b border-gray-200 shadow-sm">
-        {simulatedProgress >= 0 ? (
+        {simulatedProgress >= 0 && liveInfo.status === "em rota" ? (
            <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full shadow-md z-[1000] flex items-center gap-2 border border-blue-100">
              <span className="relative flex h-2 w-2"><span className="animate-ping absolute h-full w-full rounded-full opacity-60 bg-blue-500"></span><span className="relative rounded-full h-2 w-2 bg-blue-500"></span></span>
              <span className="text-[10px] font-bold text-blue-800 uppercase">{activeTripInfo?.mode || "Em Viagem"}</span>
+           </div>
+        ) : liveInfo.status === "problema" ? (
+           <div className="absolute top-2 right-2 bg-red-600/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg z-[1000] border border-red-700 flex items-center gap-2">
+             <AlertTriangle size={14} className="text-white animate-pulse" />
+             <span className="text-[10px] font-bold text-white uppercase">{liveInfo.mensagem || "Aviso Reportado"}</span>
            </div>
         ) : (
            <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full shadow-md z-[1000] border border-amber-100">
              <span className="text-[10px] font-bold text-amber-800 uppercase flex items-center gap-1"><Clock size={12}/> Aguardando Partida</span>
            </div>
         )}
-        <LeafletMap points={currentRoutePoints} busProgress={simulatedProgress} lineColor={line.color} />
+        <LeafletMap points={currentRoutePoints} busProgress={simulatedProgress} lineColor={line.color} hasProblem={liveInfo.status === "problema"} />
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3 bg-white space-y-3">
@@ -473,6 +483,7 @@ function LineDetailScreen({ line, initialDir, onBack, customRoutes, liveStatus, 
                 const stopTimeMins = activeTripInfo.startTime + (SIMULATED_TRIP_DURATION * stopPercentage);
                 timeText = minutesToTime(stopTimeMins);
                 if (hasPassed) statusColor = "text-gray-400";
+                else if (liveInfo.status === "problema") statusColor = "text-red-600 font-extrabold";
                 else if (isNext) statusColor = "text-blue-600 font-extrabold";
                 else statusColor = "text-gray-900";
              }
@@ -487,26 +498,27 @@ function LineDetailScreen({ line, initialDir, onBack, customRoutes, liveStatus, 
                 }
              }
 
+             const linhaProgressoCor = liveInfo.status === "problema" ? "bg-red-500" : "bg-blue-600";
+
              return (
                <div key={idx} className="relative pl-7">
                  {idx < activeStops.length - 1 && (
                    <div className="absolute left-[7px] top-5 w-[3px] h-full bg-gray-200 overflow-hidden z-0">
                      <div 
-                       className="w-full bg-blue-600 transition-all duration-500" 
+                       className={`w-full transition-all duration-500 ${linhaProgressoCor}`} 
                        style={{ height: `${segmentFillPercent}%` }} 
                      />
                    </div>
                  )}
 
-                 <div className={`absolute -left-[1px] top-1 w-4 h-4 rounded-full border-2 flex items-center justify-center bg-white z-10 ${hasPassed ? 'border-blue-600 bg-blue-50' : isNext ? 'border-blue-500 shadow-[0_0_8px_rgba(37,99,235,0.6)]' : 'border-gray-300'}`}>
-                    {hasPassed && <Check size={10} className="text-blue-600 stroke-[3]" />}
-                    {isNext && <span className="absolute w-2 h-2 bg-blue-600 rounded-full animate-pulse" />}
+                 <div className={`absolute -left-[1px] top-1 w-4 h-4 rounded-full border-2 flex items-center justify-center bg-white z-10 ${hasPassed ? (liveInfo.status === 'problema' ? 'border-red-500 bg-red-50' : 'border-blue-600 bg-blue-50') : isNext ? 'border-blue-500 shadow-[0_0_8px_rgba(37,99,235,0.6)]' : 'border-gray-300'}`}>
+                    {hasPassed && <Check size={10} className={liveInfo.status === 'problema' ? "text-red-500 stroke-[3]" : "text-blue-600 stroke-[3]"} />}
+                    {isNext && <span className={`absolute w-2 h-2 rounded-full animate-pulse ${liveInfo.status === 'problema' ? 'bg-red-500' : 'bg-blue-600'}`} />}
                  </div>
                  
                  <div className="flex justify-between items-center bg-gray-50/80 p-2.5 rounded-xl border border-gray-100 shadow-sm">
                    <div>
                      <p className={`text-[13px] ${isNext ? 'font-bold text-blue-900' : hasPassed ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>{stop}</p>
-                     {isNext && <p className="text-[10px] text-blue-600 font-bold">Autocarro próximo!</p>}
                    </div>
                    <div className="flex items-center gap-2">
                      <span className={`text-[13px] ${statusColor}`}>{timeText}</span>
@@ -621,7 +633,7 @@ function TripPlannerScreen({ lines, onSelectRoute }) {
   );
 }
 
-// --- TELA DE CONFIGURAÇÕES / DEFINIÇÕES DO CLIENTE ---
+// --- TELA DE DEFINIÇÕES ---
 function ClientSettingsScreen() {
   const [notifMinutes, setNotifMinutes] = useState(() => localStorage.getItem('notif_minutes') || '10');
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('notif_sound') === 'true' || true);
@@ -654,13 +666,12 @@ function ClientSettingsScreen() {
             <label className="text-xs font-extrabold text-gray-800 flex items-center gap-1.5">
               <Bell size={15} className="text-blue-600" /> Tempo de Antecedência do Alerta:
             </label>
-            <p className="text-[11px] text-gray-500">Escolha com quantos minutos de antecedência deseja ser avisado antes da partida/aproximação:</p>
             <select 
               value={notifMinutes}
               onChange={(e) => setNotifMinutes(e.target.value)}
               className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs bg-gray-50 font-bold text-gray-800 focus:outline-none focus:border-blue-600 mt-1"
             >
-              <option value="3">3 minutos antes (Muito próximo)</option>
+              <option value="3">3 minutos antes</option>
               <option value="5">5 minutos antes</option>
               <option value="10">10 minutos antes (Padrão)</option>
               <option value="15">15 minutos antes</option>
@@ -685,28 +696,21 @@ function ClientSettingsScreen() {
             Guardar Configurações
           </button>
         </form>
-
-        <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl space-y-2 text-center">
-          <p className="text-xs font-bold text-blue-900">Sobre o App</p>
-          <p className="text-[11px] text-blue-700 leading-relaxed">
-            Ilha Comprida Ônibus v1.0.0 — Conectado ao Supabase com rastreamento ativo em segundo plano e otimizado para o litoral.
-          </p>
-        </div>
       </div>
     </div>
   );
 }
 
-// --- TELA INICIAL COM DETECÇÃO DA LINHA MAIS PRÓXIMA ---
+// --- TELA INICIAL COM DETEÇÃO DE GPS OTIMIZADA ---
 function HomeScreen({ lines, onSelectLine, userDirs, toggleDir, liveStatus, onOpenPlanner, customRoutes }) {
   const [timeOffsets, setTimeOffsets] = useState({});
   const [nearestLineId, setNearestLineId] = useState(null);
-  
   const [alertModalInfo, setAlertModalInfo] = useState({ isOpen: false, title: "", body: "" });
 
+  // CORREÇÃO: Olheiro contínuo de GPS para detetar aproximação de forma inteligente
   useEffect(() => {
     if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
+      const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
           let minD = Infinity;
@@ -717,16 +721,20 @@ function HomeScreen({ lines, onSelectLine, userDirs, toggleDir, liveStatus, onOp
             const pts = Array.isArray(rData) ? rData : (rData.points || []);
             pts.forEach(pt => {
               const d = getDistance(pt, [latitude, longitude]);
-              if (d < minD) {
-                minD = d;
-                foundId = key.split("_")[0];
-              }
+              if (d < minD) { minD = d; foundId = key.split("_")[0]; }
             });
           });
-          if (foundId) setNearestLineId(foundId);
+          
+          // Se a distância for razoavelmente curta, destaca a linha
+          if (foundId && minD < 0.05) { 
+            setNearestLineId(foundId); 
+          }
         },
-        () => {}
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
       );
+      
+      return () => navigator.geolocation.clearWatch(watchId);
     }
   }, [customRoutes]);
 
@@ -734,10 +742,7 @@ function HomeScreen({ lines, onSelectLine, userDirs, toggleDir, liveStatus, onOp
     if (!nearestLineId) return lines;
     const copy = [...lines];
     const idx = copy.findIndex(l => l.id === nearestLineId);
-    if (idx > 0) {
-      const [item] = copy.splice(idx, 1);
-      copy.unshift(item);
-    }
+    if (idx > 0) { const [item] = copy.splice(idx, 1); copy.unshift(item); }
     return copy;
   }, [lines, nearestLineId]);
 
@@ -813,8 +818,8 @@ function HomeScreen({ lines, onSelectLine, userDirs, toggleDir, liveStatus, onOp
           <div className="bg-blue-50 border border-blue-200 p-3 rounded-2xl flex items-center gap-3 shadow-sm animate-in fade-in">
             <div className="p-2 bg-blue-600 text-white rounded-xl"><Sparkles size={16} /></div>
             <div>
-              <p className="text-xs font-bold text-blue-900">Linha mais próxima detetada por GPS</p>
-              <p className="text-[11px] text-blue-700">A linha <b>{lines.find(l => l.id === nearestLineId)?.name}</b> foi colocada no topo.</p>
+              <p className="text-xs font-bold text-blue-900">Linha detetada por GPS</p>
+              <p className="text-[11px] text-blue-700">Você está perto da linha <b>{lines.find(l => l.id === nearestLineId)?.name}</b>.</p>
             </div>
           </div>
         )}
@@ -825,14 +830,14 @@ function HomeScreen({ lines, onSelectLine, userDirs, toggleDir, liveStatus, onOp
           const rawTimes = line.directions[dir]?.times || [];
           
           const validTimes = getFilteredSortedTimes(rawTimes);
-          
           const offsetKey = `${line.id}_${dir}`;
           const currentOffset = timeOffsets[offsetKey] || 0;
           const safeIndex = Math.min(currentOffset, validTimes.length - 1);
           const currentTime = validTimes[safeIndex] || "--:--";
 
           const activeTripTime = liveInfo.activeTime || validTimes[0];
-          const isThisTripRunning = liveInfo.status === "em rota" && currentTime === activeTripTime;
+          // CORREÇÃO: Tratamos 'problema' como uma viagem que ainda está a ocorrer (foi iniciada)
+          const isThisTripRunning = (liveInfo.status === "em rota" || liveInfo.status === "problema") && currentTime === activeTripTime;
           const isNearest = nearestLineId === line.id;
 
           return (
@@ -853,8 +858,8 @@ function HomeScreen({ lines, onSelectLine, userDirs, toggleDir, liveStatus, onOp
                     <div>
                       <p className="text-[14px] font-bold text-gray-900 leading-tight">{line.directions[dir]?.label || "Sentido"}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <StatusDot status={isThisTripRunning ? "em rota" : "parado"} color={line.color} />
-                        <StatusLabel status={isThisTripRunning ? "em rota" : "parado"} mode={liveInfo.mode} />
+                        <StatusDot status={isThisTripRunning ? liveInfo.status : "parado"} color={line.color} />
+                        <StatusLabel status={isThisTripRunning ? liveInfo.status : "parado"} mode={liveInfo.mode} />
                       </div>
                     </div>
                   </div>
@@ -1036,8 +1041,7 @@ export default function App() {
   const [customStops, setCustomStops] = useState({});
 
   useEffect(() => {
-    const hasSeen = localStorage.getItem("onboarding_seen");
-    if (hasSeen) setShowOnboarding(false);
+    if (localStorage.getItem("onboarding_seen")) setShowOnboarding(false);
   }, []);
 
   const handleFinishOnboarding = () => {
@@ -1075,7 +1079,7 @@ export default function App() {
     };
     fetchDados();
 
-    // SUBSCRIÇÃO REALTIME: Atualiza o app cliente instantaneamente quando o ADM altera no banco
+    // SUBSCRIÇÃO REALTIME: Atualiza o app cliente instantaneamente
     const channel = supabase
       .channel('public:linhas_onibus')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'linhas_onibus' }, (payload) => {
@@ -1097,70 +1101,8 @@ export default function App() {
       })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, []);
-
-  // GATILHO INTELIGENTE DE SEGUNDO PLANO
-  useEffect(() => {
-    if (!showOnboarding && "geolocation" in navigator) {
-      const watchId = navigator.geolocation.watchPosition(
-        async (position) => {
-          const { latitude, longitude, speed } = position.coords;
-          const currentSpeedKmH = speed ? speed * 3.6 : 0;
-
-          if (currentSpeedKmH > 15) {
-            const lineId = "cv";
-            const routeKey = `${lineId}_dir_0`;
-            const routeData = customRoutes[routeKey];
-            const pts = Array.isArray(routeData) ? routeData : (routeData?.points || []);
-
-            if (pts.length >= 2) {
-              let minDist = Infinity;
-              let closestIdx = 0;
-              pts.forEach((pt, idx) => {
-                const dist = getDistance(pt, [latitude, longitude]);
-                if (dist < minDist) {
-                  minDist = dist;
-                  closestIdx = idx;
-                }
-              });
-
-              if (minDist < 0.0015) {
-                const progress = closestIdx / (pts.length - 1);
-                const now = new Date();
-                const nowMins = now.getHours() * 60 + now.getMinutes();
-                const lineObj = lines.find(l => l.id === lineId);
-                const validTimes = getFilteredSortedTimes(lineObj?.directions[0]?.times || []);
-                const activeTime = validTimes[0] || "06:00";
-
-                const payload = {
-                  status: "em rota",
-                  last_update: `hoje às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
-                  mensagem: "Partilha Colaborativa Ativa",
-                  direcao_ativa: 0,
-                  start_time_mins: nowMins,
-                  gps_progress: progress,
-                  active_time: activeTime
-                };
-
-                setLiveStatus(prev => ({
-                  ...prev,
-                  [lineId]: { status: "em rota", startTimeMins: nowMins, gpsProgress: progress, activeTime: activeTime, mode: "GPS Ao Vivo" }
-                }));
-                await supabase.from("linhas_onibus").update(payload).eq("id", lineId);
-              }
-            }
-          }
-        },
-        (error) => console.error("Erro GPS em segundo plano:", error),
-        { enableHighAccuracy: true, maximumAge: 3000, timeout: 5000 }
-      );
-
-      return () => navigator.geolocation.clearWatch(watchId);
-    }
-  }, [showOnboarding, customRoutes, lines]);
 
   if (showOnboarding) {
     return <OnboardingScreen onComplete={handleFinishOnboarding} />;
